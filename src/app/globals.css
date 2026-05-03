@@ -1,0 +1,295 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-base: #080a12;
+  --bg-sidebar: #0c0e1a;
+  --bg-card: #0f1220;
+  --bg-elevated: #141828;
+  --border-subtle: #1e2535;
+  --border-heavy: #2a3a5c;
+  --accent-primary: #6d28d9;
+  --accent-bright: #7c3aed;
+  --accent-active: #8b5cf6;
+  --rust: #c87941;
+  --rust-warm: #a0622a;
+  --neon-green: #22c55e;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --text-primary: #e2e8f0;
+  --text-muted: #64748b;
+  --text-dim: #374151;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: #080a12;
+  color: #e2e8f0;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+/* ── Scrollbar styling ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0c0e1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a3a5c;
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6d28d9;
+}
+
+/* ── Scanline overlay ── */
+.scanlines::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Pixel art rendering ── */
+.pixel-art {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* ── Machinarium rust glow ── */
+.rust-glow {
+  box-shadow: 0 0 12px rgba(200, 121, 65, 0.4);
+}
+
+/* ── Indigo glow for active ── */
+.indigo-glow {
+  box-shadow: 0 0 12px rgba(109, 40, 217, 0.5);
+}
+
+/* ── Green glow for live/active ── */
+.green-glow {
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+}
+
+/* ── Background noise grain ── */
+.grain-bg {
+  position: relative;
+}
+
+.grain-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+}
+
+/* ── Brutalist card ── */
+.card-brutalist {
+  background: #0f1220;
+  border: 1px solid #2a3a5c;
+  border-radius: 0;
+}
+
+.card-brutalist-elevated {
+  background: #141828;
+  border: 1px solid #2a3a5c;
+  border-radius: 0;
+}
+
+/* ── Miso avatar float animation ── */
+@keyframes misoFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.miso-float {
+  animation: misoFloat 3s ease-in-out infinite;
+}
+
+/* ── Agent bob animation ── */
+@keyframes agentBob {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.agent-bob {
+  animation: agentBob 2s ease-in-out infinite;
+}
+
+/* ── Agent walk animation ── */
+@keyframes agentWalk {
+  0% {
+    transform: translateX(0px);
+  }
+  25% {
+    transform: translateX(12px);
+  }
+  50% {
+    transform: translateX(24px);
+  }
+  75% {
+    transform: translateX(12px);
+  }
+  100% {
+    transform: translateX(0px);
+  }
+}
+
+.agent-walk {
+  animation: agentWalk 6s ease-in-out infinite;
+}
+
+/* ── Ticker scroll ── */
+@keyframes tickerScroll {
+  0% {
+    transform: translateX(100vw);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.ticker-scroll {
+  animation: tickerScroll 40s linear infinite;
+  white-space: nowrap;
+}
+
+/* ── Pulsing dot ── */
+@keyframes dotPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
+}
+
+.dot-pulse {
+  animation: dotPulse 1.5s ease-in-out infinite;
+}
+
+/* ── Progress bar glow ── */
+.progress-glow {
+  box-shadow: 0 0 8px currentColor;
+}
+
+/* ── Hover state for agent sprites ── */
+.agent-sprite-container:hover .agent-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.agent-tooltip {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease;
+}
+
+/* ── Selection highlight ── */
+::selection {
+  background: rgba(109, 40, 217, 0.4);
+  color: #e2e8f0;
+}
+
+/* ── Focus outline ── */
+:focus-visible {
+  outline: 1px solid #6d28d9;
+  outline-offset: 2px;
+}
+
+/* ── Input styling ── */
+input, textarea, select {
+  background: #0f1220;
+  border: 1px solid #2a3a5c;
+  color: #e2e8f0;
+  border-radius: 0;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #6d28d9;
+  box-shadow: 0 0 0 1px #6d28d9;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #374151;
+}
+
+/* ── Room grid floor lines ── */
+.room-floor {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* ── Tag pill ── */
+.tag-pill {
+  background: #0f1220;
+  border: 1px solid #2a3a5c;
+  color: #64748b;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  letter-spacing: 0.05em;
+}
+
+/* ── Status badge base ── */
+.status-badge {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border: 1px solid;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+/* ── Cron monospace display ── */
+.cron-display {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.75rem;
+  color: #64748b;
+  letter-spacing: 0.05em;
+}
