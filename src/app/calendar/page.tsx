@@ -1,6 +1,50 @@
 "use client";
 
-import { SCHEDULED_JOBS, ScheduledJob } from "@/lib/mock-data";
+import { useState, useEffect } from "react";
+import { SCHEDULED_JOBS } from "@/lib/mock-data";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ScheduledJob {
+  id: string;
+  name: string;
+  type: "daily" | "recurring" | "one-shot";
+  cron: string;
+  enabled: boolean;
+  agent: string;
+  prompt: string;
+  lastRun?: string;
+  nextRun?: string;
+}
+
+interface ApiJob {
+  id: string;
+  name: string;
+  type: "daily" | "recurring" | "one-shot";
+  cron: string;
+  enabled: boolean;
+  agent: string;
+  prompt: string;
+  lastRun?: string;
+  nextRun?: string;
+}
+
+// Adapt mock data
+function mockToJob(m: (typeof SCHEDULED_JOBS)[0]): ScheduledJob {
+  return {
+    id: m.id,
+    name: m.name,
+    type: m.type,
+    cron: m.cronExpression,
+    enabled: m.enabled,
+    agent: m.agent,
+    prompt: m.promptPreview,
+    lastRun: m.lastRun,
+    nextRun: m.nextRun,
+  };
+}
+
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 const TYPE_CONFIG = {
   daily: { color: "#22c55e", label: "DAILY" },
@@ -8,9 +52,10 @@ const TYPE_CONFIG = {
   "one-shot": { color: "#f472b6", label: "ONE-SHOT" },
 };
 
-function formatNextRun(isoString: string): string {
+function formatNextRun(isoString: string | undefined): string {
+  if (!isoString) return "—";
   const target = new Date(isoString);
-  const now = new Date("2026-05-03T12:00:00Z");
+  const now = new Date();
   const diffMs = target.getTime() - now.getTime();
 
   if (diffMs < 0) return "OVERDUE";
@@ -24,9 +69,10 @@ function formatNextRun(isoString: string): string {
   return `in ${diffD}d ${diffH % 24}h`;
 }
 
-function formatLastRun(isoString: string): string {
+function formatLastRun(isoString: string | undefined): string {
+  if (!isoString) return "—";
   const d = new Date(isoString);
-  const now = new Date("2026-05-03T12:00:00Z");
+  const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   const diffH = Math.floor(diffMin / 60);
@@ -37,8 +83,18 @@ function formatLastRun(isoString: string): string {
   return `${diffD}d ago`;
 }
 
-function JobCard({ job }: { job: ScheduledJob }) {
-  const typeCfg = TYPE_CONFIG[job.type];
+// ─── Job Card ─────────────────────────────────────────────────────────────────
+
+function JobCard({
+  job,
+  onToggle,
+  flashUpdated,
+}: {
+  job: ScheduledJob;
+  onToggle: (id: string, enabled: boolean) => void;
+  flashUpdated: boolean;
+}) {
+  const typeCfg = TYPE_CONFIG[job.type] ?? TYPE_CONFIG.recurring;
 
   return (
     <div
@@ -73,34 +129,29 @@ function JobCard({ job }: { job: ScheduledJob }) {
               >
                 {typeCfg.label}
               </span>
-              <span
-                className={`text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border tracking-wider uppercase ${
-                  job.enabled
-                    ? "text-[#22c55e] border-[#22c55e] bg-[#22c55e]/10"
-                    : "text-[#64748b] border-[#374151] bg-transparent"
-                }`}
-              >
-                {job.enabled ? "ENABLED" : "DISABLED"}
-              </span>
+
+              {/* Flash badge */}
+              {flashUpdated && (
+                <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border tracking-wider uppercase text-[#22c55e] border-[#22c55e] bg-[#22c55e]/10">
+                  UPDATED ✓
+                </span>
+              )}
             </div>
 
             {/* Cron expression */}
             <div className="flex items-center gap-3 mb-2">
-              <code className="cron-display bg-[#080a12] px-2 py-1 border border-[#1e2535] text-[#c87941]">
-                {job.cronExpression}
+              <code className="cron-display bg-[#080a12] px-2 py-1 border border-[#1e2535] text-[#c87941] font-mono text-[0.65rem]">
+                {job.cron}
               </code>
-              <span className="text-[0.65rem] font-mono text-[#64748b]">
-                {job.cronHuman}
-              </span>
             </div>
 
             {/* Agent */}
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-[0.6rem] font-mono text-[#374151] uppercase tracking-wider">Agent:</span>
-              <span className="text-[0.65rem] font-mono font-bold text-[#e2e8f0]">{job.agent}</span>
-              <span className="text-[#374151]">·</span>
-              <span className="text-[0.6rem] font-mono text-[#374151]">
-                {job.runCount} runs total
+              <span className="text-[0.6rem] font-mono text-[#374151] uppercase tracking-wider">
+                Agent:
+              </span>
+              <span className="text-[0.65rem] font-mono font-bold text-[#e2e8f0]">
+                {job.agent}
               </span>
             </div>
 
@@ -110,21 +161,43 @@ function JobCard({ job }: { job: ScheduledJob }) {
                 Prompt Preview
               </span>
               <p className="text-[0.65rem] font-mono text-[#64748b] leading-relaxed line-clamp-2">
-                {job.promptPreview}
+                {job.prompt}
               </p>
             </div>
           </div>
 
-          {/* Right side — timing */}
-          <div className="flex-shrink-0 text-right space-y-3 min-w-[120px]">
+          {/* Right side */}
+          <div className="flex-shrink-0 text-right space-y-3 min-w-[130px]">
+            {/* Toggle button */}
+            <div>
+              <button
+                onClick={() => onToggle(job.id, !job.enabled)}
+                className="font-mono text-[0.7rem] font-bold tracking-wider px-3 py-1 border transition-all duration-150 hover:opacity-80 active:scale-95"
+                style={
+                  job.enabled
+                    ? {
+                        color: "#22c55e",
+                        borderColor: "#22c55e",
+                        background: "rgba(34,197,94,0.1)",
+                      }
+                    : {
+                        color: "#ef4444",
+                        borderColor: "#ef4444",
+                        background: "rgba(239,68,68,0.08)",
+                      }
+                }
+              >
+                {job.enabled ? "[ON]" : "[OFF]"}
+              </button>
+            </div>
+
+            {/* Timing */}
             <div>
               <div className="text-[0.55rem] font-mono text-[#374151] uppercase tracking-wider mb-0.5">
                 Next Run
               </div>
               <div
-                className={`text-sm font-mono font-bold ${
-                  job.enabled ? "" : "text-[#374151]"
-                }`}
+                className={`text-sm font-mono font-bold ${!job.enabled ? "text-[#374151]" : ""}`}
                 style={job.enabled ? { color: typeCfg.color } : {}}
               >
                 {job.enabled ? formatNextRun(job.nextRun) : "—"}
@@ -145,9 +218,54 @@ function JobCard({ job }: { job: ScheduledJob }) {
   );
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function CalendarPage() {
-  const enabledCount = SCHEDULED_JOBS.filter((j) => j.enabled).length;
-  const disabledCount = SCHEDULED_JOBS.filter((j) => !j.enabled).length;
+  const [jobs, setJobs] = useState<ScheduledJob[]>(SCHEDULED_JOBS.map(mockToJob));
+  const [loading, setLoading] = useState(true);
+  const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetch("/api/calendar")
+      .then((r) => r.json())
+      .then((data: ApiJob[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setJobs(data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleToggle = async (id: string, enabled: boolean) => {
+    // Optimistic update
+    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, enabled } : j)));
+
+    try {
+      await fetch("/api/calendar", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, enabled }),
+      });
+    } catch {
+      // Revert on failure
+      setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, enabled: !enabled } : j)));
+      return;
+    }
+
+    // Flash "Updated" badge for 2 seconds
+    setFlashIds((prev) => new Set(Array.from(prev).concat(id)));
+    setTimeout(() => {
+      setFlashIds((prev) => {
+        const next = new Set(Array.from(prev));
+        next.delete(id);
+        return next;
+      });
+    }, 2000);
+  };
+
+  const enabledCount = jobs.filter((j) => j.enabled).length;
+  const disabledCount = jobs.filter((j) => !j.enabled).length;
 
   return (
     <div className="h-full overflow-y-auto bg-[#080a12]">
@@ -167,6 +285,9 @@ export default function CalendarPage() {
                 {disabledCount} DISABLED
               </span>
             )}
+            {loading && (
+              <span className="text-[0.6rem] font-mono text-[#374151]">LOADING...</span>
+            )}
             <div className="flex-1 h-px bg-[#1e2535]" />
           </div>
 
@@ -183,13 +304,26 @@ export default function CalendarPage() {
                 </span>
               </div>
             ))}
+            <div className="flex items-center gap-3 ml-auto text-[0.6rem] font-mono text-[#374151]">
+              <span>
+                <span className="text-[#22c55e] font-bold">[ON]</span> = enabled
+              </span>
+              <span>
+                <span className="text-[#ef4444] font-bold">[OFF]</span> = disabled
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Jobs list */}
         <div className="space-y-3">
-          {SCHEDULED_JOBS.map((job) => (
-            <JobCard key={job.id} job={job} />
+          {jobs.map((job) => (
+            <JobCard
+              key={job.id}
+              job={job}
+              onToggle={handleToggle}
+              flashUpdated={flashIds.has(job.id)}
+            />
           ))}
         </div>
 

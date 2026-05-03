@@ -2,11 +2,16 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import ScanlineOverlay from "@/components/ScanlineOverlay";
+import { initializeServer } from "@/lib/startup";
 
 export const metadata: Metadata = {
   title: "OpenClaw — Mission Control",
   description: "AI Agent Mission Control Dashboard powered by Miso",
 };
+
+// Initialize server-side services (workspace + cron jobs) on first render
+// This runs on the server and is idempotent
+initializeServer();
 
 export default function RootLayout({
   children,

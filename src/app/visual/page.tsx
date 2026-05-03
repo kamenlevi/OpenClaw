@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { AGENTS, TEAM_COLORS, TEAM_LABELS, TeamName, Agent } from "@/lib/agents";
 import MisoAvatar from "@/components/MisoAvatar";
+import { useSSE } from "@/hooks/useSSE";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CANVAS & ROOM LAYOUT
@@ -437,15 +438,19 @@ interface RoomProps {
   label: string; color: string; tint: string;
   x: number; y: number; w: number; h: number;
   children?: React.ReactNode; furniture?: React.ReactNode; glowColor?: string;
+  teamActive?: boolean;
 }
-function Room({ label, color, tint, x, y, w, h, children, furniture, glowColor }: RoomProps) {
+function Room({ label, color, tint, x, y, w, h, children, furniture, glowColor, teamActive }: RoomProps) {
+  const activeGlow = teamActive ? `0 0 40px ${color}, 0 0 80px ${color}55` : undefined;
   return (
     <div className="absolute" style={{
       left: x, top: y, width: w, height: h, background: tint,
-      border: `3px solid ${color}`,
-      boxShadow: glowColor ? `0 0 24px ${glowColor}` : `inset 0 0 30px rgba(0,0,0,0.5)`,
+      border: `3px solid ${teamActive ? color : color}`,
+      borderWidth: teamActive ? 4 : 3,
+      boxShadow: activeGlow ?? (glowColor ? `0 0 24px ${glowColor}` : `inset 0 0 30px rgba(0,0,0,0.5)`),
       backgroundImage: `linear-gradient(rgba(255,255,255,0.01) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.01) 1px,transparent 1px)`,
       backgroundSize: "20px 20px", overflow: "visible",
+      transition: "box-shadow 0.4s ease, border-width 0.3s ease",
     }}>
       <div className="absolute inset-0 pointer-events-none" style={{ background: color, opacity: 0.04 }} />
       <div className="absolute" style={{ top: 6, left: 8, fontFamily: "monospace", fontSize: 8, fontWeight: 700, color, letterSpacing: "0.18em", textTransform: "uppercase", opacity: 0.85 }}>
@@ -714,6 +719,8 @@ function MisoRoomContent({ onClickMiso }: { onClickMiso: (e: React.MouseEvent) =
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface Toast { id: number; message: string; }
+
 export default function VisualPage() {
   const [popup, setPopup] = useState<PopupData | null>(null);
   const [scale, setScale] = useState(0.65);
@@ -722,6 +729,11 @@ export default function VisualPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const isPanning = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
+
+  // SSE state
+  const [glowTeams, setGlowTeams] = useState<Set<string>>(new Set());
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastIdRef = useRef(0);
 
   const clampScale = (s: number) => Math.max(0.35, Math.min(2.2, s));
 
@@ -796,6 +808,29 @@ export default function VisualPage() {
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
 
+  // SSE: team glow + toast
+  const handleSSEEvent = useCallback((event: Record<string, unknown>) => {
+    if (event.type === "team_start") {
+      const team = event.team as string;
+      setGlowTeams(prev => new Set(Array.from(prev).concat(team)));
+      // Remove glow after 3 seconds
+      setTimeout(() => {
+        setGlowTeams(prev => { const next = new Set(Array.from(prev)); next.delete(team); return next; });
+      }, 3000);
+    }
+    if (event.type === "task_complete") {
+      const result = (event.result as string) ?? "";
+      const preview = result.slice(0, 50);
+      const id = ++toastIdRef.current;
+      setToasts(prev => [...prev, { id, message: `Task complete — ${preview}` }]);
+      setTimeout(() => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+      }, 5000);
+    }
+  }, []);
+
+  useSSE(handleSSEEvent);
+
   const handleAgentClick = (agent: Agent, evt: React.MouseEvent) => {
     setPopup({ agent, screenX: evt.clientX, screenY: evt.clientY });
   };
@@ -850,18 +885,18 @@ export default function VisualPage() {
           <Room label="✦ Command Center" color="#f97316" tint="#060200" glowColor="rgba(249,115,22,0.22)" x={R.command.x} y={R.command.y} w={R.command.w} h={R.command.h} furniture={<CommandFurniture />}>
             <MisoRoomContent onClickMiso={handleMisoClick} />
           </Room>
-          <Room label="Automation Floor" color={TEAM_COLORS.automation} tint="#080a0e" x={R.automation.x} y={R.automation.y} w={R.automation.w} h={R.automation.h} furniture={<AutomationFurniture />} />
-          <Room label="Research Lab" color={TEAM_COLORS.research} tint="#060410" x={R.research.x} y={R.research.y} w={R.research.w} h={R.research.h} furniture={<ResearchFurniture />} />
-          <Room label="Notifications Hub" color={TEAM_COLORS.notifications} tint="#080700" x={R.notifications.x} y={R.notifications.y} w={R.notifications.w} h={R.notifications.h} furniture={<NotificationsFurniture />} />
-          <Room label="Security Post" color={TEAM_COLORS.security} tint="#0a0303" x={R.security.x} y={R.security.y} w={R.security.w} h={R.security.h} furniture={<SecurityFurniture />} />
+          <Room label="Automation Floor" color={TEAM_COLORS.automation} tint="#080a0e" x={R.automation.x} y={R.automation.y} w={R.automation.w} h={R.automation.h} furniture={<AutomationFurniture />} teamActive={glowTeams.has("automation")} />
+          <Room label="Research Lab" color={TEAM_COLORS.research} tint="#060410" x={R.research.x} y={R.research.y} w={R.research.w} h={R.research.h} furniture={<ResearchFurniture />} teamActive={glowTeams.has("research")} />
+          <Room label="Notifications Hub" color={TEAM_COLORS.notifications} tint="#080700" x={R.notifications.x} y={R.notifications.y} w={R.notifications.w} h={R.notifications.h} furniture={<NotificationsFurniture />} teamActive={glowTeams.has("notifications")} />
+          <Room label="Security Post" color={TEAM_COLORS.security} tint="#0a0303" x={R.security.x} y={R.security.y} w={R.security.w} h={R.security.h} furniture={<SecurityFurniture />} teamActive={glowTeams.has("security")} />
           <Room label="Break Room / Kitchen" color="#92400e" tint="#0a0601" x={R.breakroom.x} y={R.breakroom.y} w={R.breakroom.w} h={R.breakroom.h} furniture={<BreakroomFurniture />} />
-          <Room label="File Room" color={TEAM_COLORS.files} tint="#080500" x={R.files.x} y={R.files.y} w={R.files.w} h={R.files.h} furniture={<FileFurniture />} />
-          <Room label="Code Cave" color={TEAM_COLORS.code} tint="#020709" x={R.code.x} y={R.code.y} w={R.code.w} h={R.code.h} furniture={<CodeCaveFurniture />} />
-          <Room label="Scheduler Tower" color={TEAM_COLORS.scheduler} tint="#01070600" x={R.schedulerTower.x} y={R.schedulerTower.y} w={R.schedulerTower.w} h={R.schedulerTower.h} furniture={<SchedulerFurniture />} />
-          <Room label="Obsidian Library" color={TEAM_COLORS.obsidian} tint="#010800" x={R.obsidian.x} y={R.obsidian.y} w={R.obsidian.w} h={R.obsidian.h} furniture={<ObsidianFurniture />} />
+          <Room label="File Room" color={TEAM_COLORS.files} tint="#080500" x={R.files.x} y={R.files.y} w={R.files.w} h={R.files.h} furniture={<FileFurniture />} teamActive={glowTeams.has("files")} />
+          <Room label="Code Cave" color={TEAM_COLORS.code} tint="#020709" x={R.code.x} y={R.code.y} w={R.code.w} h={R.code.h} furniture={<CodeCaveFurniture />} teamActive={glowTeams.has("code")} />
+          <Room label="Scheduler Tower" color={TEAM_COLORS.scheduler} tint="#01070600" x={R.schedulerTower.x} y={R.schedulerTower.y} w={R.schedulerTower.w} h={R.schedulerTower.h} furniture={<SchedulerFurniture />} teamActive={glowTeams.has("scheduler")} />
+          <Room label="Obsidian Library" color={TEAM_COLORS.obsidian} tint="#010800" x={R.obsidian.x} y={R.obsidian.y} w={R.obsidian.w} h={R.obsidian.h} furniture={<ObsidianFurniture />} teamActive={glowTeams.has("obsidian")} />
           {/* Bottom row overflow rooms */}
-          <Room label="File Archive" color={TEAM_COLORS.files} tint="#080500" x={R.fileroom2.x} y={R.fileroom2.y} w={R.fileroom2.w} h={R.fileroom2.h} furniture={<FileFurniture />} />
-          <Room label="Code Cave — Deep" color={TEAM_COLORS.code} tint="#020709" x={R.codecave2.x} y={R.codecave2.y} w={R.codecave2.w} h={R.codecave2.h} furniture={<CodeCaveFurniture />} />
+          <Room label="File Archive" color={TEAM_COLORS.files} tint="#080500" x={R.fileroom2.x} y={R.fileroom2.y} w={R.fileroom2.w} h={R.fileroom2.h} furniture={<FileFurniture />} teamActive={glowTeams.has("files")} />
+          <Room label="Code Cave — Deep" color={TEAM_COLORS.code} tint="#020709" x={R.codecave2.x} y={R.codecave2.y} w={R.codecave2.w} h={R.codecave2.h} furniture={<CodeCaveFurniture />} teamActive={glowTeams.has("code")} />
 
           {/* Canvas label */}
           <div style={{ position:"absolute", left:1380, top:10, fontFamily:"monospace", fontSize:9, color:"#1e2535", letterSpacing:"0.15em", textTransform:"uppercase" }}>
@@ -884,12 +919,32 @@ export default function VisualPage() {
 
       {popup && <AgentPopup data={popup} onClose={() => setPopup(null)} />}
 
+      {/* Toast notifications */}
+      {toasts.length > 0 && (
+        <div style={{ position: "fixed", bottom: 60, right: 16, zIndex: 60, display: "flex", flexDirection: "column", gap: 8 }}>
+          {toasts.map(toast => (
+            <div key={toast.id} style={{
+              background: "#0f1220", border: "1px solid #22c55e", padding: "8px 14px",
+              fontFamily: "monospace", fontSize: 11, color: "#22c55e",
+              boxShadow: "0 0 16px rgba(34,197,94,0.3)", maxWidth: 320,
+              animation: "slideInRight 0.3s ease",
+            }}>
+              ✓ {toast.message}
+            </div>
+          ))}
+        </div>
+      )}
+
       <style>{`
         @keyframes fadeInOut {
           0%   { opacity:0; transform:translateX(-50%) translateY(4px); }
           12%  { opacity:1; transform:translateX(-50%) translateY(0); }
           82%  { opacity:1; transform:translateX(-50%) translateY(0); }
           100% { opacity:0; transform:translateX(-50%) translateY(-4px); }
+        }
+        @keyframes slideInRight {
+          0%   { opacity:0; transform:translateX(20px); }
+          100% { opacity:1; transform:translateX(0); }
         }
       `}</style>
     </div>

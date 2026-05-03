@@ -1,8 +1,39 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { PROJECTS, RECENT_ACTIVITY, Project, ActivityItem } from "@/lib/mock-data";
 import { TEAM_COLORS, TeamName } from "@/lib/agents";
 import StatusDot from "@/components/StatusDot";
+
+// ─── API types ────────────────────────────────────────────────────────────────
+
+interface ApiProject {
+  id: string;
+  name: string;
+  description: string;
+  status: "active" | "paused" | "completed";
+  team: string;
+  progress: number;
+  tasks: string[];
+  lastActivity: string;
+}
+
+function apiToProject(p: ApiProject): Project {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    status: p.status as Project["status"],
+    progress: p.progress,
+    team: p.team,
+    tasks: p.tasks,
+    lastActivity: p.lastActivity,
+    taskCount: p.tasks.length,
+    completedTasks: Math.round((p.progress / 100) * p.tasks.length),
+  };
+}
+
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
   active: { color: "#22c55e", label: "ACTIVE" },
@@ -13,7 +44,7 @@ const STATUS_CONFIG = {
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
-  const now = new Date("2026-05-03T12:00:00Z");
+  const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   const diffH = Math.floor(diffMin / 60);
@@ -24,13 +55,15 @@ function formatTimestamp(iso: string): string {
   return `${diffD}d ago`;
 }
 
+// ─── Project Card ─────────────────────────────────────────────────────────────
+
 function ProjectCard({ project }: { project: Project }) {
   const teamColor = TEAM_COLORS[project.team as TeamName] ?? "#64748b";
-  const statusCfg = STATUS_CONFIG[project.status];
+  const statusCfg =
+    STATUS_CONFIG[project.status] ?? STATUS_CONFIG.planning;
 
   return (
     <div className="bg-[#0f1220] border border-[#2a3a5c] relative overflow-hidden">
-      {/* Team color top accent */}
       <div
         className="absolute top-0 left-0 right-0 h-0.5"
         style={{ background: teamColor }}
@@ -105,9 +138,7 @@ function ProjectCard({ project }: { project: Project }) {
 
         {/* Footer */}
         <div className="mt-3 pt-3 border-t border-[#1e2535] flex justify-between items-center">
-          <span className="text-[0.6rem] font-mono text-[#374151]">
-            Last active
-          </span>
+          <span className="text-[0.6rem] font-mono text-[#374151]">Last active</span>
           <span className="text-[0.6rem] font-mono text-[#64748b]">
             {formatTimestamp(project.lastActivity)}
           </span>
@@ -117,9 +148,19 @@ function ProjectCard({ project }: { project: Project }) {
   );
 }
 
-function ActivityRow({ item }: { item: ActivityItem }) {
-  const project = PROJECTS.find((p) => p.id === item.projectId);
-  const teamColor = project ? TEAM_COLORS[project.team as TeamName] ?? "#64748b" : "#64748b";
+// ─── Activity Row ─────────────────────────────────────────────────────────────
+
+function ActivityRow({
+  item,
+  projects,
+}: {
+  item: ActivityItem;
+  projects: Project[];
+}) {
+  const project = projects.find((p) => p.id === item.projectId);
+  const teamColor = project
+    ? TEAM_COLORS[project.team as TeamName] ?? "#64748b"
+    : "#64748b";
 
   return (
     <div className="flex items-center gap-3 px-4 py-2 border-b border-[#1e2535]/50 hover:bg-[#0f1220]/50 transition-colors">
@@ -148,7 +189,25 @@ function ActivityRow({ item }: { item: ActivityItem }) {
   );
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function ProjectsPage() {
+  const [projects, setProjects] = useState<Project[]>(PROJECTS);
+  const [recentActivity] = useState<ActivityItem[]>(RECENT_ACTIVITY);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/projects")
+      .then((r) => r.json())
+      .then((data: ApiProject[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setProjects(data.map(apiToProject));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <div className="h-full overflow-y-auto bg-[#080a12]">
       <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -158,27 +217,35 @@ export default function ProjectsPage() {
           <h1 className="text-xs font-mono font-bold tracking-[0.2em] text-[#e2e8f0] uppercase">
             Projects
           </h1>
-          <div className="flex gap-2">
-            {Object.entries(STATUS_CONFIG).map(([status, cfg]) => {
-              const count = PROJECTS.filter((p) => p.status === status).length;
-              if (count === 0) return null;
-              return (
-                <span
-                  key={status}
-                  className="px-2 py-0.5 text-[0.55rem] font-mono font-bold border tracking-wider uppercase"
-                  style={{ color: cfg.color, borderColor: cfg.color, background: `${cfg.color}10` }}
-                >
-                  {count} {cfg.label}
-                </span>
-              );
-            })}
-          </div>
+          {loading ? (
+            <span className="text-[0.6rem] font-mono text-[#374151]">LOADING...</span>
+          ) : (
+            <div className="flex gap-2">
+              {Object.entries(STATUS_CONFIG).map(([status, cfg]) => {
+                const count = projects.filter((p) => p.status === status).length;
+                if (count === 0) return null;
+                return (
+                  <span
+                    key={status}
+                    className="px-2 py-0.5 text-[0.55rem] font-mono font-bold border tracking-wider uppercase"
+                    style={{
+                      color: cfg.color,
+                      borderColor: cfg.color,
+                      background: `${cfg.color}10`,
+                    }}
+                  >
+                    {count} {cfg.label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
           <div className="flex-1 h-px bg-[#1e2535]" />
         </div>
 
         {/* Project grid */}
         <div className="grid grid-cols-2 gap-4">
-          {PROJECTS.map((project) => (
+          {projects.map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}
         </div>
@@ -194,14 +261,22 @@ export default function ProjectsPage() {
 
           <div className="bg-[#0c0e1a] border border-[#1e2535]">
             <div className="flex items-center gap-3 px-4 py-2 border-b border-[#1e2535] bg-[#141828]">
-              <span className="text-[0.55rem] font-mono font-bold tracking-[0.2em] text-[#374151] uppercase w-16">Time</span>
+              <span className="text-[0.55rem] font-mono font-bold tracking-[0.2em] text-[#374151] uppercase w-16">
+                Time
+              </span>
               <div className="w-0.5 opacity-0 h-4" />
-              <span className="text-[0.55rem] font-mono font-bold tracking-[0.2em] text-[#374151] uppercase w-20">Agent</span>
-              <span className="text-[0.55rem] font-mono font-bold tracking-[0.2em] text-[#374151] uppercase flex-1">Action</span>
-              <span className="text-[0.55rem] font-mono font-bold tracking-[0.2em] text-[#374151] uppercase w-32 text-right">Project</span>
+              <span className="text-[0.55rem] font-mono font-bold tracking-[0.2em] text-[#374151] uppercase w-20">
+                Agent
+              </span>
+              <span className="text-[0.55rem] font-mono font-bold tracking-[0.2em] text-[#374151] uppercase flex-1">
+                Action
+              </span>
+              <span className="text-[0.55rem] font-mono font-bold tracking-[0.2em] text-[#374151] uppercase w-32 text-right">
+                Project
+              </span>
             </div>
-            {RECENT_ACTIVITY.map((item) => (
-              <ActivityRow key={item.id} item={item} />
+            {recentActivity.map((item) => (
+              <ActivityRow key={item.id} item={item} projects={projects} />
             ))}
           </div>
         </section>
