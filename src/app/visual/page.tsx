@@ -727,7 +727,7 @@ export default function VisualPage() {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [agentPositions, setAgentPositions] = useState<Record<string, AgentPos>>(buildInitialPositions);
   const containerRef = useRef<HTMLDivElement>(null);
-  const isPanning = useRef(false);
+  const [isPanning, setIsPanning] = useState(false);
   const lastMouse = useRef({ x: 0, y: 0 });
 
   // SSE state
@@ -737,10 +737,21 @@ export default function VisualPage() {
 
   const clampScale = (s: number) => Math.max(0.35, Math.min(2.2, s));
 
-  // Zoom via wheel
+  // Zoom via wheel (cursor-relative)
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
-    setScale(prev => clampScale(prev - e.deltaY * 0.001));
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const mx = e.clientX - rect.left - rect.width / 2;
+    const my = e.clientY - rect.top - rect.height / 2;
+    setScale(prev => {
+      const newScale = Math.max(0.35, Math.min(2.2, prev - e.deltaY * 0.001));
+      if (newScale === prev) return prev;
+      const ratio = newScale / prev;
+      setOffset(o => ({ x: mx - (mx - o.x) * ratio, y: my - (my - o.y) * ratio }));
+      return newScale;
+    });
   }, []);
   useEffect(() => {
     const el = containerRef.current;
@@ -752,15 +763,15 @@ export default function VisualPage() {
   // Pan
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    isPanning.current = true;
+    setIsPanning(true);
     lastMouse.current = { x: e.clientX, y: e.clientY };
   };
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isPanning.current) return;
+    if (!isPanning) return;
     setOffset(prev => ({ x: prev.x + e.clientX - lastMouse.current.x, y: prev.y + e.clientY - lastMouse.current.y }));
     lastMouse.current = { x: e.clientX, y: e.clientY };
   };
-  const handleMouseUp = () => { isPanning.current = false; };
+  const handleMouseUp = () => { setIsPanning(false); };
 
   // ── Agent movement engine ──
   useEffect(() => {
@@ -859,7 +870,7 @@ export default function VisualPage() {
       {/* Viewport */}
       <div
         ref={containerRef}
-        style={{ flex:1, overflow:"hidden", position:"relative", cursor:"grab", background:"#030406" }}
+        style={{ flex:1, overflow:"hidden", position:"relative", cursor: isPanning ? "grabbing" : "grab", background:"#030406" }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

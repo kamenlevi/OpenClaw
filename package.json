@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "cli": "npx ts-node scripts/openclaw.ts",
+    "telegram": "npx ts-node services/telegram-bot.ts",
+    "launch": "bash launch.sh",
+    "desktop": "npm run build && cd electron && npm install && npm start"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.1",
@@ -33,6 +37,7 @@
     "eslint-config-next": "14.2.5",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }
