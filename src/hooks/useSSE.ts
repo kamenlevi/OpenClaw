@@ -1,8 +1,10 @@
 'use client'
-import { useEffect, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
 
 export function useSSE(onEvent: (event: Record<string, unknown>) => void) {
-  const stableHandler = useCallback(onEvent, [])
+  // Always point to the latest handler without restarting the SSE connection
+  const handlerRef = useRef(onEvent)
+  handlerRef.current = onEvent
 
   useEffect(() => {
     let es: EventSource
@@ -11,7 +13,7 @@ export function useSSE(onEvent: (event: Record<string, unknown>) => void) {
     const connect = () => {
       es = new EventSource('/api/stream')
       es.onmessage = (e) => {
-        try { stableHandler(JSON.parse(e.data)) } catch {}
+        try { handlerRef.current(JSON.parse(e.data)) } catch {}
       }
       es.onerror = () => {
         es.close()
@@ -21,5 +23,5 @@ export function useSSE(onEvent: (event: Record<string, unknown>) => void) {
 
     connect()
     return () => { es?.close(); clearTimeout(retryTimeout) }
-  }, [stableHandler])
+  }, []) // connect once — handler stays current via ref
 }
